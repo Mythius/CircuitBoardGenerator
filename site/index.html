@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Document</title>
+	<link rel="icon" type="image/x-icon" href="icon.png">
+	<style>
+		canvas{
+			background-color: black;
+		}
+	</style>
+	<script src="helpers.js"></script>
+	<script src="grid.js"></script>
+	<!-- <script src="input.js"></script> -->
+</head>
+<body>
+	<canvas width=800 height=800></canvas>
+	<br><br><p></p>
+	<script>
+		let canvas = obj('canvas');
+		let ctx = canvas.getContext('2d');
+		ctx.textAlign = "center";
+		ctx.fillStyle = 'white';
+		// mouse.start(canvas);
+
+		const DIM = 50;
+		const tile_count = 13;
+		const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
+
+		class Cell{
+			constructor(i,opts=[]){
+				if(!(i instanceof HTMLCanvasElement)){
+					this.img = create('img');
+					this.img.src = `circuit/${i}.png`;
+				} else {
+					this.img = i;
+				}
+				this.opts = opts;
+			}
+			draw(tile){
+				let w2 = tile.grid.scale/2;
+				let ct = tile.getCenter();
+				ctx.drawImage(this.img,ct.x-w2,ct.y-w2,w2*2,w2*2);
+			}
+			rotate(times){
+				let newImg = create('canvas');
+				newImg.width=512;newImg.height=512;
+				let nctx = newImg.getContext('2d');
+				nctx.translate(256,256);
+				nctx.rotate(Math.PI/2*times);
+				nctx.drawImage(this.img,-256,-256,512,512);
+				let newopts = this.opts.slice();
+				for(let i=0;i<times;i++){
+					newopts.unshift(newopts.pop());
+				}
+				return new Cell(newImg,newopts)
+			}
+			canConnect(cell,dir){
+				let odir = (2+dir)%4;
+				return this.opts[dir] == revString(cell.opts[odir]);
+			}
+		}
+		function revString(string){
+			return string.split('').reverse().join('');
+		}
+
+		Tile.prototype.collapsed = false;
+		Tile.prototype.cell = null;
+		Tile.prototype.opts = [];
+		Tile.prototype.draw = function(){
+			if(this.cell) this.cell.draw(this);
+			if(false){ // switch to true to see white lines
+				let ct = this.getCenter();
+				let w2 = this.grid.scale / 2;
+				ctx.beginPath();
+				ctx.strokeStyle = 'white';
+				ctx.rect(ct.x-w2,ct.y-w2,w2*2,w2*2);
+				ctx.stroke();
+			}
+			// let ct = this.getCenter();
+			// ctx.fillText(this.collapsed?'.':this.opts.length,ct.x,ct.y);
+		}
+		Tile.prototype.evaluatePossibilities = function(){
+			let possible = [];
+			let EVALUATED = [];
+			for(let cellopt of cells){
+				let andopp = true;
+				for(let i=0;i<4;i++){
+					let otherTile = this.grid.getTileAt(this.x+dirs[i][0],this.y+dirs[i][1]);
+					if(otherTile){
+						if(otherTile.cell){
+							andopp &= cellopt.canConnect(otherTile.cell,i);
+						}
+					}
+				}
+				if(andopp) possible.push(cellopt);
+			}
+			this.opts = possible;
+			// console.log(possible);
+			return possible;
+		}
+
+		function tearUp(holes){
+			let holes_created = [];
+			let offPos = (FAILURE_ATTEMPTS < 40) ? 1 : 2;
+			for(let hole of holes){
+				for(let x=-offPos;x<=offPos;x++){
+					for(let y=-offPos;y<=offPos;y++){
+						let tileToTear = grid.getTileAt(hole.x+x,hole.y+y);
+						if(!tileToTear) continue;
+						tileToTear.cell = null;
+						tileToTear.collapsed = false;
+						holes_created.push(tileToTear);
+					}
+				}
+			}
+			for(let hole of holes_created){
+				hole.evaluatePossibilities();
+			}
+		}
+
+		function addOne(start=false){
+			var x,y;
+			if(start){
+				x = random(0,grid.width-1);
+				y = random(0,grid.height-1)
+				grid.getTileAt(x,y).cell = cells[random(0,cells.length-1)];
+			} else {
+				let opts = grid.tiles.flat().filter(e=>!e.collapsed).sort((a,b)=>{
+					return a.opts.length - b.opts.length;
+				});
+				if(opts[0]){
+					let lowest = opts[0].opts.length;
+					opts = opts.filter(e=>e.opts.length == lowest);
+					opts = opts.sort(()=>Math.random()-.5);
+					let tile = opts[0];
+					x = tile.x;
+					y = tile.y;
+					let Tile_Options = tile.opts;
+					tile.opts = [Tile_Options[random(0,Tile_Options.length-1)]]
+					tile.cell = tile.opts[0];
+				} else {
+					return 1;
+				}
+			}
+			let THE_ONE = grid.getTileAt(x,y);
+			THE_ONE.collapsed = true;
+			for(let dir of dirs){
+				let tile = grid.getTileAt(x+dir[0],y+dir[1]);
+				if(tile){
+					tile.evaluatePossibilities();
+				}
+			}
+			return 0;
+		}
+
+		Grid.prototype.draw = function(){
+			this.forEach(tile=>{
+				tile.draw();
+			})
+		}
+
+		let grid = new Grid(DIM,DIM,800/DIM);
+
+		var cells;
+		generateCells();
+
+		function generateCells(){
+			cells = new Array(tile_count).fill(null);
+			cells[0]  = new Cell(0,["AAA", "AAA", "AAA", "AAA"]);
+			cells[1]  = new Cell(1,["BBB", "BBB", "BBB", "BBB"]);
+			cells[2]  = new Cell(2,["BBB", "BCB", "BBB", "BBB"]);
+			cells[3]  = new Cell(3,["BBB", "BDB", "BBB", "BDB"]);
+			cells[4]  = new Cell(4,["ABB", "BCB", "BBA", "AAA"]);
+			cells[5]  = new Cell(5,["ABB", "BBB", "BBB", "BBA"]);
+			cells[6]  = new Cell(6,["BBB", "BCB", "BBB", "BCB"]);
+			cells[7]  = new Cell(7,["BDB", "BCB", "BDB", "BCB"]);
+			cells[8]  = new Cell(8,["BDB", "BBB", "BCB", "BBB"]);
+			cells[9]  = new Cell(9,["BCB", "BCB", "BBB", "BCB"]);
+			cells[10] = new Cell(10,["BCB", "BCB", "BCB", "BCB"]);
+			cells[11] = new Cell(11,["BCB", "BCB", "BBB", "BBB"]);
+			cells[12] = new Cell(12,["BBB", "BCB", "BBB", "BCB"]);
+
+			for(let i=2;i<tile_count-1;i++){
+				cells.push(cells[i].rotate(1))
+				cells.push(cells[i].rotate(2))
+				cells.push(cells[i].rotate(3))
+			}
+
+		}
+		function setup(){
+			let i=0;
+			grid.forEach(tile=>{
+				tile.cell = null;
+				tile.opts = new Array(cells.length).fill(0).map((_,i)=>i);
+			});
+			addOne(true);
+			loop();
+		}
+
+		let counter = 0;
+
+		var FINISHED = false;
+
+		var FAILURE_ATTEMPTS = 0;
+
+		function loop(){
+			if(!FINISHED){
+				var finnormal = addOne();
+				if(finnormal) {
+					FINISHED = true;
+				}
+			} else {
+				let holes = grid.tiles.flat().filter(e=>!e.cell);
+				if(holes.length == 0){
+					return;
+				} else {
+					FAILURE_ATTEMPTS++;
+					tearUp(holes);
+					FINISHED = false;
+				}
+			}
+
+			setTimeout(loop,1000/60);
+			ctx.clearRect(-2,-2,canvas.width+2,canvas.height+2);
+			grid.draw();
+			let n = grid.tiles.flat().filter(e=>e.collapsed).length;
+		}
+
+		setup();
+
+
+
+	</script>
+</body>
+</html>
