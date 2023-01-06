@@ -32,6 +32,7 @@
 
 		class Cell{
 			constructor(i,opts=[]){
+				const THIS = this;
 				if(!(i instanceof HTMLCanvasElement)){
 					this.img = create('img');
 					this.img.src = `circuit/${i}.png`;
@@ -39,6 +40,12 @@
 					this.img = i;
 				}
 				this.opts = opts;
+				this.img.onload = function(){
+					// ctx.drawImage(this,0,0,512,512);
+					cells.push(THIS.rotate(1));
+					cells.push(THIS.rotate(2));
+					cells.push(THIS.rotate(3));
+				}
 			}
 			draw(tile){
 				let w2 = tile.grid.scale/2;
@@ -184,13 +191,10 @@
 			cells[11] = new Cell(11,["BCB", "BCB", "BBB", "BBB"]);
 			cells[12] = new Cell(12,["BBB", "BCB", "BBB", "BCB"]);
 
-			for(let i=2;i<tile_count-1;i++){
-				cells.push(cells[i].rotate(1))
-				cells.push(cells[i].rotate(2))
-				cells.push(cells[i].rotate(3))
-			}
-
 		}
+
+
+
 		function setup(){
 			let i=0;
 			grid.forEach(tile=>{
@@ -230,7 +234,9 @@
 			let n = grid.tiles.flat().filter(e=>e.collapsed).length;
 		}
 
-		setup();
+		ctx.font = '40px Arial';
+		ctx.fillText("LOADING...",canvas.width/2,canvas.height-100);
+		setTimeout(setup,1000);
 
 
 
